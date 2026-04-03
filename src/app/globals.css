@@ -1,0 +1,150 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-display: 'Inter', serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  /* Zen Light Mode - RGB Values */
+  --color-cream: 244 244 245;    /* #F4F4F5 */
+  --color-ink: 18 18 18;         /* #121212 */
+  --color-white: 255 255 255;    /* #FFFFFF */
+  --color-paper: 253 253 253;    /* #FDFDFD */
+  --color-mist: 113 113 122;     /* #71717A */
+  --color-sage: 46 204 113;      /* #2ECC71 (Electric Emerald) */
+  --color-amber: 241 196 15;     /* #F1C40F (Soft Amber) */
+  --color-rust: 231 76 60;       /* #E74C3C */
+}
+
+.dark {
+  /* Deep State Dark Mode - RGB Values */
+  --color-cream: 26 26 27;       /* #1A1A1B */
+  --color-ink: 245 245 247;      /* #F5F5F7 */
+  --color-white: 42 42 43;       /* #2A2A2B */
+  --color-paper: 38 38 38;       /* #262626 */
+  --color-mist: 161 161 170;     /* #A1A1AA */
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    @apply transition-colors duration-200 border-ink/10;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: rgb(var(--color-cream));
+    color: rgb(var(--color-ink));
+    @apply antialiased;
+  }
+
+  ::selection {
+    background: rgb(var(--color-sage));
+    color: rgb(var(--color-cream));
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-ink text-cream font-body font-medium px-5 py-2.5 rounded-lg
+    hover:bg-ink/80 active:scale-95 transition-all duration-150 text-sm;
+  }
+
+  .btn-secondary {
+    @apply bg-cream-dark text-ink font-body font-medium px-5 py-2.5 rounded-lg
+    border border-ink/10 hover:border-ink/30 active:scale-95 transition-all duration-150 text-sm;
+  }
+
+  .btn-danger {
+    @apply bg-rust/10 text-rust font-body font-medium px-5 py-2.5 rounded-lg
+    border border-rust/20 hover:bg-rust/20 active:scale-95 transition-all duration-150 text-sm;
+  }
+
+  .card {
+    @apply bg-white/40 backdrop-blur-md border border-ink/10 rounded-2xl p-6
+    shadow-lg hover:shadow-xl transition-shadow duration-200;
+  }
+
+  .input-field {
+    @apply w-full bg-white/20 backdrop-blur-md border border-ink/20 rounded-xl px-4 py-3
+    font-body text-sm text-ink placeholder-mist
+    focus:outline-none focus:ring-2 focus:ring-amber/50 focus:border-amber
+    shadow-inner transition-all duration-150;
+  }
+
+  .score-ring {
+    @apply relative flex items-center justify-center rounded-full font-mono font-medium;
+  }
+
+  .tag {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium font-body;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .grain {
+    position: relative;
+  }
+
+  .grain::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    border-radius: inherit;
+    z-index: 0;
+  }
+}
+
+/* Score bar animation */
+.score-bar {
+  transition: width 1s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Voice recording pulse */
+@keyframes voicePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.7; }
+}
+
+.voice-recording {
+  animation: voicePulse 1.2s ease-in-out infinite;
+}
+
+/* Staggered fade in for task list */
+.task-item {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.task-item:nth-child(1) { animation-delay: 0ms; }
+.task-item:nth-child(2) { animation-delay: 60ms; }
+.task-item:nth-child(3) { animation-delay: 120ms; }
+.task-item:nth-child(4) { animation-delay: 180ms; }
+.task-item:nth-child(5) { animation-delay: 240ms; }
+.task-item:nth-child(n+6) { animation-delay: 300ms; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Focus mode spotlight */
+@keyframes spotlight {
+  0% { box-shadow: 0 0 0 0 rgba(232, 160, 32, 0); }
+  50% { box-shadow: 0 0 40px 4px rgba(232, 160, 32, 0.12); }
+  100% { box-shadow: 0 0 0 0 rgba(232, 160, 32, 0); }
+}
+
+.focus-spotlight {
+  animation: spotlight 3s ease-in-out infinite;
+}
