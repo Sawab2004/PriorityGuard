@@ -2,6 +2,7 @@
 
 **AI-powered cognitive prioritization for freelancers.**  
 Stop wasting your peak hours on $15/hr tasks.
+*demo video: https://drive.google.com/file/d/1qG-b267rg6lfbGsf9ZoxSOoMkIQ2CmM6/view?usp=drive_link *
 
 --- 
 
