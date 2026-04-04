@@ -221,5 +221,4 @@ Estimates income "protected" by completing high-value tasks today, based on your
 - Scoring quality degrades for tasks without `estimated_value`, `due_date`, or `estimated_duration_mins`; provide these fields for best results
 - Focus Mode only shows tasks scheduled for today — tasks from previous days must be rescheduled to appear
 - No recurring tasks or long-term scheduling
-- Google OAuth tokens are not auto-refreshed; if Gmail/Calendar sync fails, re-authenticate via the integrations panel
-- `focus_sessions` and `daily_summaries` tables are provisioned but not yet written to — historical session analytics are not available in this phase
+- Cold start: AI scoring improves with more context but works from day 1
