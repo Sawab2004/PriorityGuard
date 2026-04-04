@@ -29,17 +29,49 @@ export async function getTokensFromCode(code: string) {
   return tokens
 }
 
+/**
+ * Creates an OAuth2 client with automatic token refresh.
+ *
+ * Google access tokens expire after 1 hour. Previously, expired tokens caused
+ * silent failures in Gmail and Calendar sync. Now, when the client detects an
+ * expired token it automatically fetches a new one using the refresh token and
+ * calls `onTokenRefresh` so the caller can persist the new credentials.
+ *
+ * @param accessToken   Current stored access token
+ * @param refreshToken  Stored refresh token (long-lived)
+ * @param onTokenRefresh  Called with new tokens when a refresh occurs
+ */
+function createAuthenticatedClient(
+  accessToken: string,
+  refreshToken: string,
+  onTokenRefresh?: (newAccessToken: string, expiryDate: number) => Promise<void>
+) {
+  const oauth2Client = getGoogleOAuthClient()
+
+  oauth2Client.setCredentials({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  })
+
+  // Listen for token refresh events emitted by the Google client library
+  oauth2Client.on('tokens', async (tokens) => {
+    if (tokens.access_token && onTokenRefresh) {
+      const expiry = tokens.expiry_date ?? Date.now() + 3600 * 1000
+      console.log('[google.ts] Token refreshed, persisting new access token.')
+      await onTokenRefresh(tokens.access_token, expiry)
+    }
+  })
+
+  return oauth2Client
+}
+
 export async function fetchGmailTasks(
   accessToken: string,
-  refreshToken: string
+  refreshToken: string,
+  onTokenRefresh?: (newAccessToken: string, expiryDate: number) => Promise<void>
 ): Promise<GmailTask[]> {
   try {
-    const oauth2Client = getGoogleOAuthClient()
-    oauth2Client.setCredentials({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    })
-
+    const oauth2Client = createAuthenticatedClient(accessToken, refreshToken, onTokenRefresh)
     const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
 
     // Fetch emails with action-required keywords in subject
@@ -75,7 +107,12 @@ export async function fetchGmailTasks(
     }
 
     return tasks
-  } catch (err) {
+  } catch (err: any) {
+    // Surface auth errors clearly so callers can prompt re-authentication
+    if (err?.code === 401 || err?.message?.includes('invalid_grant')) {
+      console.error('[google.ts] Gmail auth error — refresh token may be revoked. User must re-authenticate.')
+      throw new Error('GOOGLE_AUTH_EXPIRED')
+    }
     console.error('Gmail fetch error:', err)
     return []
   }
@@ -83,16 +120,13 @@ export async function fetchGmailTasks(
 
 export async function fetchCalendarTasks(
   accessToken: string,
-  refreshToken: string
+  refreshToken: string,
+  onTokenRefresh?: (newAccessToken: string, expiryDate: number) => Promise<void>
 ): Promise<CalendarTask[]> {
   try {
-    const oauth2Client = getGoogleOAuthClient()
-    oauth2Client.setCredentials({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    })
-
+    const oauth2Client = createAuthenticatedClient(accessToken, refreshToken, onTokenRefresh)
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client })
+
     const now = new Date()
     const tomorrow = new Date(now)
     tomorrow.setDate(tomorrow.getDate() + 2)
@@ -122,7 +156,11 @@ export async function fetchCalendarTasks(
             )
           : null,
       }))
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.code === 401 || err?.message?.includes('invalid_grant')) {
+      console.error('[google.ts] Calendar auth error — refresh token may be revoked. User must re-authenticate.')
+      throw new Error('GOOGLE_AUTH_EXPIRED')
+    }
     console.error('Calendar fetch error:', err)
     return []
   }

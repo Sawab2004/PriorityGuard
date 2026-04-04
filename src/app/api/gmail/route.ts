@@ -21,16 +21,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Gmail not connected' }, { status: 400 })
   }
 
-  const gmailTasks = await fetchGmailTasks(
-    profile.google_access_token,
-    profile.google_refresh_token
-  )
+  // Token refresh callback — persists new credentials to the profile row
+  // so the next sync uses the refreshed token without requiring re-authentication.
+  const onTokenRefresh = async (newAccessToken: string, expiryDate: number) => {
+    await supabase
+      .from('profiles')
+      .update({
+        google_access_token: newAccessToken,
+        google_token_expiry: new Date(expiryDate).toISOString(),
+      })
+      .eq('id', session.user.id)
+  }
+
+  let gmailTasks
+  try {
+    gmailTasks = await fetchGmailTasks(
+      profile.google_access_token,
+      profile.google_refresh_token,
+      onTokenRefresh
+    )
+  } catch (err: any) {
+    if (err.message === 'GOOGLE_AUTH_EXPIRED') {
+      // Disable sync and inform the client so the UI can prompt re-authentication
+      await supabase
+        .from('profiles')
+        .update({ gmail_sync_enabled: false })
+        .eq('id', session.user.id)
+      return NextResponse.json(
+        { error: 'Gmail authorization expired. Please reconnect your Google account.' },
+        { status: 401 }
+      )
+    }
+    return NextResponse.json({ error: 'Gmail sync failed' }, { status: 500 })
+  }
 
   if (gmailTasks.length === 0) {
     return NextResponse.json({ message: 'No actionable emails found', imported: 0 })
   }
 
-  // Check for existing imports to avoid duplicates
+  // Deduplicate against already-imported emails
   const { data: existing } = await supabase
     .from('tasks')
     .select('gmail_message_id')
@@ -88,5 +117,9 @@ export async function POST(req: NextRequest) {
     if (data) inserted.push(data)
   }
 
-  return NextResponse.json({ message: `Imported ${inserted.length} tasks`, imported: inserted.length, tasks: inserted })
+  return NextResponse.json({
+    message: `Imported ${inserted.length} tasks`,
+    imported: inserted.length,
+    tasks: inserted,
+  })
 }

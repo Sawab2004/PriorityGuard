@@ -10,7 +10,7 @@ import { CheckCircle, SkipForward, ArrowLeft, Clock } from 'lucide-react'
 export default function FocusPage() {
   const router = useRouter()
   const supabase = createBrowserClient()
-  
+
   const [tasks, setTasks] = useState<Task[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -37,21 +37,23 @@ export default function FocusPage() {
     async function fetchTasks() {
       setLoading(true)
       const { data: { session } } = await supabase.auth.getSession()
-      
+
       if (!session) {
         router.push('/login')
         return
       }
 
-      const today = new Date().toISOString().split('T')[0]
+      // FIX: Removed the `scheduled_for = today` filter.
+      // Previously, tasks from previous days or tasks added without a scheduled
+      // date would never appear in Focus Mode even though they were still pending.
+      // Now Focus Mode shows ALL pending tasks, sorted by score — same as the dashboard.
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
         .eq('user_id', session.user.id)
         .eq('status', 'pending')
-        .eq('scheduled_for', today)
         .order('ai_score', { ascending: false })
-      
+
       if (data) setTasks(data)
       setLoading(false)
     }
@@ -64,16 +66,14 @@ export default function FocusPage() {
   const handleComplete = async () => {
     if (!currentTask) return
     setActionLoading('complete')
-    
+
     const completedAt = new Date().toISOString()
     const { error } = await supabase
       .from('tasks')
       .update({ status: 'completed', completed_at: completedAt })
       .eq('id', currentTask.id)
 
-    if (error) {
-      console.error(error)
-    }
+    if (error) console.error(error)
 
     setActionLoading(null)
     if (currentIndex + 1 >= tasks.length) {
@@ -86,15 +86,13 @@ export default function FocusPage() {
   const handleSkip = async () => {
     if (!currentTask) return
     setActionLoading('skip')
-    
+
     const { error } = await supabase
       .from('tasks')
       .update({ status: 'skipped' })
       .eq('id', currentTask.id)
 
-    if (error) {
-      console.error(error)
-    }
+    if (error) console.error(error)
 
     setActionLoading(null)
     if (currentIndex + 1 >= tasks.length) {
@@ -117,7 +115,7 @@ export default function FocusPage() {
       <div className="min-h-screen bg-ink flex flex-col items-center justify-center p-8 text-center">
         <div className="text-5xl mb-6">🎯</div>
         <h1 className="font-display text-3xl font-bold text-cream mb-3">
-          {tasks.length === 0 ? 'No tasks today' : 'Queue complete!'}
+          {tasks.length === 0 ? 'No pending tasks' : 'Queue complete!'}
         </h1>
         <p className="font-body text-cream/50 text-sm mb-8 max-w-xs">
           {tasks.length === 0
@@ -137,7 +135,7 @@ export default function FocusPage() {
 
   const score = currentTask.ai_score
   const scoreColor = getScoreColor(score)
-  const progress = ((currentIndex) / tasks.length) * 100
+  const progress = (currentIndex / tasks.length) * 100
 
   return (
     <div className="min-h-screen bg-ink flex flex-col">
@@ -202,12 +200,12 @@ export default function FocusPage() {
 
           {/* Revenue Tracker */}
           <div className="flex flex-col items-center justify-center mb-6 bg-sage/5 border border-sage/10 p-4 rounded-2xl w-full max-w-xs mx-auto">
-             <div className="text-[10px] font-body text-sage/70 mb-1 tracking-widest uppercase">Revenue Secured</div>
-             <div className="font-mono text-4xl text-sage font-light tracking-tight">
-                <span className="opacity-50 text-2xl mr-1">$</span>
-                {((elapsed / 3600) * (currentTask.hourly_rate_at_creation || 0)).toFixed(2)}
-             </div>
-             <div className="text-xs text-sage/40 mt-1">based on ${currentTask.hourly_rate_at_creation || 0}/hr rate</div>
+            <div className="text-[10px] font-body text-sage/70 mb-1 tracking-widest uppercase">Revenue Secured</div>
+            <div className="font-mono text-4xl text-sage font-light tracking-tight">
+              <span className="opacity-50 text-2xl mr-1">$</span>
+              {((elapsed / 3600) * (currentTask.hourly_rate_at_creation || 0)).toFixed(2)}
+            </div>
+            <div className="text-xs text-sage/40 mt-1">based on ${currentTask.hourly_rate_at_creation || 0}/hr rate</div>
           </div>
 
           {/* Meta */}
