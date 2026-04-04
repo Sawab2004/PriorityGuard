@@ -2,7 +2,7 @@
 
 **AI-powered cognitive prioritization for freelancers.**  
 Stop wasting your peak hours on $15/hr tasks.
-
+https://priority-guard.vercel.app/dashboard
 ---
 
 ## What It Does
