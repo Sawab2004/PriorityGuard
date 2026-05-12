@@ -9,7 +9,7 @@ Stop wasting your peak hours on $15/hr tasks.
 
 ## What It Does
 
-PriorityGuard is an MVP for AI-4013 Phase 3. It helps solopreneurs and freelancers protect their peak cognitive hours by automatically scoring and prioritizing tasks by economic value, urgency, and cognitive effort.
+It helps solopreneurs and freelancers protect their peak cognitive hours by automatically scoring and prioritizing tasks by economic value, urgency, and cognitive effort.
 
 **Core user flow:**
 1. Add tasks via text or voice
