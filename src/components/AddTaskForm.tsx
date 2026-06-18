@@ -44,16 +44,28 @@ export default function AddTaskForm({ onTaskAdded, session }: AddTaskFormProps) 
     estimated_value: '',
     estimated_duration_mins: '',
   })
+  const [usedVoice, setUsedVoice] = useState(false)
 
   // Load draft from localStorage on mount
   useEffect(() => {
     const saved = localStorage.getItem('pg_task_draft')
     if (saved) {
       try {
-        setForm(JSON.parse(saved))
-        setOpen(true) // Re-open if there was a draft
+        const parsed = JSON.parse(saved)
+        const expectedKeys = ['title', 'description', 'due_date', 'estimated_value', 'estimated_duration_mins']
+        const isValidShape =
+          parsed && typeof parsed === 'object' &&
+          expectedKeys.every(k => typeof parsed[k] === 'string')
+
+        if (isValidShape) {
+          setForm(parsed)
+          if (parsed.title) setOpen(true) // Re-open only if there's an actual title
+        } else {
+          localStorage.removeItem('pg_task_draft')
+        }
       } catch (e) {
-        console.error("Failed to parse task draft", e)
+        console.error('Failed to parse task draft, clearing it', e)
+        localStorage.removeItem('pg_task_draft')
       }
     }
   }, [])
@@ -93,6 +105,7 @@ export default function AddTaskForm({ onTaskAdded, session }: AddTaskFormProps) 
       setTranscript(text)
       if (result.isFinal) {
         setForm(f => ({ ...f, title: text }))
+        setUsedVoice(true)
         setTranscript('')
         setRecording(false)
       }
@@ -117,6 +130,13 @@ export default function AddTaskForm({ onTaskAdded, session }: AddTaskFormProps) 
     setTranscript('')
   }, [])
 
+  // Stop any active recording if the component unmounts (e.g. user navigates away)
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop()
+    }
+  }, [])
+
   const handleSubmit = async () => {
     if (!form.title.trim()) {
       setError('Please enter a task title.')
@@ -128,7 +148,7 @@ export default function AddTaskForm({ onTaskAdded, session }: AddTaskFormProps) 
 
     const payload: CreateTaskInput = {
       title: form.title.trim(),
-      source: transcript ? 'voice' : 'manual',
+      source: usedVoice ? 'voice' : 'manual',
       description: form.description || undefined,
       due_date: form.due_date || undefined,
       estimated_value: form.estimated_value ? parseFloat(form.estimated_value) : undefined,
@@ -151,6 +171,7 @@ export default function AddTaskForm({ onTaskAdded, session }: AddTaskFormProps) 
       onTaskAdded(data.task)
       localStorage.removeItem('pg_task_draft')
       setForm({ title: '', description: '', due_date: '', estimated_value: '', estimated_duration_mins: '' })
+      setUsedVoice(false)
       setOpen(false)
     } catch (err: any) {
       setError(err.message || 'Something went wrong. Please try again.')
@@ -192,7 +213,10 @@ export default function AddTaskForm({ onTaskAdded, session }: AddTaskFormProps) 
             type="text"
             placeholder={recording ? 'Listening…' : 'Task title'}
             value={recording && transcript ? transcript : form.title}
-            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            onChange={e => {
+              setForm(f => ({ ...f, title: e.target.value }))
+              setUsedVoice(false)
+            }}
             className="input-field pr-4"
             onKeyDown={e => e.key === 'Enter' && !loading && handleSubmit()}
             autoFocus

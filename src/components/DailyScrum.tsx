@@ -97,22 +97,33 @@ export default function DailyScrum({ profile, onClose }: DailyScrumProps) {
                       "text-sm font-body leading-relaxed whitespace-pre-wrap",
                       error ? "text-rust font-medium" : "text-ink/80"
                     )}>
-                      {briefing || error || "Scrum failed to load. (Did you run the SQL migration?)"}
+                      {briefing || error || "Couldn't load your briefing right now."}
                     </div>
+                    {error && (
+                      <button
+                        onClick={fetchBriefing}
+                        className="mt-3 text-xs font-body font-medium text-sage hover:text-sage-dark underline underline-offset-2"
+                      >
+                        Try again
+                      </button>
+                    )}
                  </div>
               </div>
 
               <div className="pt-6 border-t border-ink/5">
                 <button 
                   onClick={() => { setShow(false); onClose(); }}
-                  className="w-full btn-primary py-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-sage/10 text-base"
+                  disabled={!briefing && !!error}
+                  className="w-full btn-primary py-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-sage/10 text-base disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Target size={20} />
-                  Accept Strategy & Begin
+                  {briefing ? 'Accept Strategy & Begin' : 'Dismiss'}
                 </button>
-                <p className="text-[10px] text-mist/60 text-center mt-4 uppercase font-bold tracking-widest">
-                   Peak focus window starts in 12 minutes
-                </p>
+                {briefing && (
+                  <p className="text-[10px] text-mist/60 text-center mt-4 uppercase font-bold tracking-widest">
+                     Peak focus window starts in 12 minutes
+                  </p>
+                )}
               </div>
             </div>
           )}
