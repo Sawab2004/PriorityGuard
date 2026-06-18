@@ -379,7 +379,7 @@ export default function DashboardPage() {
       <ChatCoach tasks={tasks} />
     </div>
   )
-  )
+  
   
 
 }
