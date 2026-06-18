@@ -47,55 +47,75 @@ npm install
 
 ### 2. Configure environment variables
 
-Copy `.env.local` and fill in your values:
+Create a `.env.local` file in the project root and fill in your values:
 
-```bash
-cp .env.local .env.local.filled
+```env
+# Supabase (required for auth and database)
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+
+# Google OAuth (for login)
+GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_client_secret
+
+# Google APIs (for Gmail & Calendar sync)
+GOOGLE_API_KEY=your_api_key_here
+
+# AI Enrichment (optional - uses static fallback if not set)
+GEMINI_API_KEY=your_gemini_api_key
 ```
 
-Required variables:
-```
-NEXT_PUBLIC_SUPABASE_URL=         # From Supabase project settings
-NEXT_PUBLIC_SUPABASE_ANON_KEY=    # From Supabase project settings  
-SUPABASE_SERVICE_ROLE_KEY=        # From Supabase project settings (secret)
-GEMINI_API_KEY=                   # From Google AI Studio (console.cloud.google.com)
-GOOGLE_CLIENT_ID=                 # From Google Cloud Console
-GOOGLE_CLIENT_SECRET=             # From Google Cloud Console
-GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=<random-string>   # Run: openssl rand -base64 32
-```
+**Where to get these values:**
 
-> Note: If `GEMINI_API_KEY` is not set, the system falls back to a static breakdown template. Task scoring is unaffected — it runs locally with no API dependency.
+- **Supabase credentials:** Project Settings → API → Copy Project URL and Anon Key
+- **Google OAuth:** Google Cloud Console → Credentials → OAuth 2.0 Client IDs
+- **Gemini API Key:** [Google AI Studio](https://aistudio.google.com/app/apikey)
+
+> **Note:** Only `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are required to get started. If `GEMINI_API_KEY` is missing, tasks will still be scored locally with a static fallback for AI enrichment.
 
 ### 3. Set up Supabase
 
-1. Go to your Supabase project → **SQL Editor**
-2. Copy and run the entire contents of `supabase-schema.sql`
-3. Go to **Authentication → Providers → Google** and enable it
-4. Add your Google OAuth credentials to Supabase
+1. Create a project at [supabase.com](https://supabase.com)
+2. Go to your project → **SQL Editor**
+3. Click **New query** and paste the entire contents of `supabase-schema.sql`
+4. Click **Run** to create all tables
+5. Go to **Project Settings** → **API**
+   - Copy your **Project URL** and **Anon Key** into `.env.local`
+   - Copy your **Service Role Key** into `.env.local` (keep this secret)
+6. Go to **Authentication** → **Providers** → **Google** and enable it
+7. Paste your Google OAuth credentials (Client ID & Secret from Google Cloud)
 
 ### 4. Set up Google Cloud Console
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com)
-2. Create a new project (or use existing)
-3. Enable these APIs:
+2. Create a new project (or select existing)
+3. Search for and enable these APIs:
    - **Gmail API**
    - **Google Calendar API**
-   - **Google+ API** (for user info)
-4. Go to **Credentials → Create OAuth 2.0 Client ID**
-   - Application type: Web application
-   - Authorized redirect URIs:
-     - `http://localhost:3000/api/auth/callback` (Supabase)
-     - `http://localhost:3000/api/auth/google/callback` (Gmail/Calendar)
-5. Copy the Client ID and Secret to your `.env.local`
+   - **Google+ API**
+4. Go to **Credentials** → **Create OAuth 2.0 Client ID**
+   - Choose "Web application"
+   - Add these Authorized redirect URIs:
+     ```
+     http://localhost:3000/api/auth/callback
+     http://localhost:3000/auth/v1/callback
+     ```
+   - Click **Create**
+5. Copy the Client ID and Client Secret to `.env.local`
+6. Go to **APIs & Services** → **Credentials** → **+ Create Credentials** → **API Key**
+7. Copy this API Key to `.env.local` as `GOOGLE_API_KEY`
 
-### 5. Configure Supabase Google Auth
+### 5. Link Google OAuth with Supabase
 
-In Supabase Dashboard:
-- Authentication → Providers → Google
-- Paste your Google Client ID and Client Secret
-- Set redirect URL to: `http://localhost:3000/api/auth/callback`
+Back in Supabase:
+1. Go to **Authentication** → **Providers** → **Google**
+2. Paste your Google Client ID and Client Secret
+3. Vercel will show you the Supabase callback URL (copy this)
+4. Go back to Google Cloud Console and add this URL to your OAuth app's authorized redirect URIs:
+   ```
+   https://YOUR_SUPABASE_PROJECT_ID.supabase.co/auth/v1/callback
+   ```
 
 ### 6. Run the app
 
@@ -104,6 +124,62 @@ npm run dev
 ```
 
 Visit [http://localhost:3000](http://localhost:3000)
+
+---
+
+## Deployment to Vercel
+
+### 1. Connect to Vercel
+
+1. Go to [vercel.com](https://vercel.com) and sign up
+2. Click "Add New..." → "Project"
+3. Import this GitHub repository
+4. Select your GitHub account and choose PriorityGuard
+
+### 2. Set Environment Variables on Vercel
+
+In Vercel dashboard → Project Settings → Environment Variables, add:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_client_secret
+GOOGLE_API_KEY=your_api_key_here
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+### 3. Configure Supabase for Vercel Domain
+
+1. Go to your Supabase project → **Authentication** → **URL Configuration**
+2. Add your Vercel URLs to "Redirect URLs":
+   ```
+   https://YOUR_VERCEL_DOMAIN.vercel.app/api/auth/callback
+   https://YOUR_VERCEL_DOMAIN.vercel.app/auth/v1/callback
+   https://YOUR_VERCEL_DOMAIN.vercel.app/dashboard
+   ```
+3. Click **Save**
+
+### 4. Configure Google OAuth for Vercel
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Select your project
+3. Go to **Credentials** → your OAuth 2.0 Client ID
+4. Add your Vercel domain to "Authorized redirect URIs":
+   ```
+   https://YOUR_VERCEL_DOMAIN.vercel.app/api/auth/callback
+   https://YOUR_VERCEL_DOMAIN.vercel.app/auth/v1/callback
+   ```
+5. Click **Save**
+
+### 5. Deploy
+
+Vercel auto-deploys on every push to main. Monitor the deployment in Vercel dashboard and watch for build errors.
+
+### 6. Test Production Login
+
+Visit `https://YOUR_VERCEL_DOMAIN.vercel.app/login` and test the Google login flow.
 
 ---
 
