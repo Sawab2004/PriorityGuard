@@ -2,39 +2,68 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { AIScoreResult, Task, Profile } from '@/types'
 
 // ─── Title-based heuristics ────────────────────────────────────────────────
-// Used when structured fields (estimated_value, due_date, etc.) are absent.
+// Tiered keywords: CRITICAL > HIGH > MEDIUM > LOW
+// Scores are spread across the full 0–100 range so no-data tasks still
+// produce meaningful differentiation rather than piling up at one value.
+
+const CRITICAL_IMPACT_KEYWORDS = [
+  'invoice', 'contract', 'close', 'sale', 'signed', 'payment', 'revenue',
+  'launch', 'deploy', 'ship', 'go live',
+]
 
 const HIGH_IMPACT_KEYWORDS = [
-  'client', 'proposal', 'invoice', 'contract', 'pitch', 'presentation',
-  'deadline', 'launch', 'deploy', 'submit', 'deliver', 'send', 'publish',
-  'meeting', 'call', 'demo', 'interview', 'negotiat', 'close', 'sale',
+  'client', 'proposal', 'pitch', 'presentation', 'demo', 'interview',
+  'negotiat', 'deliver', 'submit', 'publish', 'send', 'deadline',
+]
+
+const MEDIUM_IMPACT_KEYWORDS = [
+  'meeting', 'call', 'review', 'feedback', 'approve', 'plan', 'design',
+  'build', 'write', 'create', 'develop', 'fix', 'update', 'implement',
 ]
 
 const LOW_IMPACT_KEYWORDS = [
-  'clean', 'organize', 'sort', 'tidy', 'read', 'browse', 'check',
-  'update profile', 'update bio', 'reply', 'follow up', 'admin',
-  'file', 'backup', 'archive',
+  'clean', 'organize', 'sort', 'tidy', 'browse', 'check',
+  'update profile', 'update bio', 'admin', 'file', 'backup', 'archive',
+  'read', 'watch', 'explore',
 ]
 
-const URGENCY_KEYWORDS = [
-  'urgent', 'asap', 'today', 'now', 'immediately', 'critical',
-  'overdue', 'late', 'due', 'deadline', 'emergency',
+const CRITICAL_URGENCY_KEYWORDS = [
+  'urgent', 'asap', 'emergency', 'critical', 'immediately', 'overdue', 'late',
 ]
 
-function inferImpactFromTitle(title: string): number | null {
+const HIGH_URGENCY_KEYWORDS = [
+  'today', 'now', 'due', 'deadline', 'eod', 'end of day',
+]
+
+function inferImpactFromTitle(title: string): { score: number; tier: string } {
   const lower = title.toLowerCase()
-  if (HIGH_IMPACT_KEYWORDS.some(kw => lower.includes(kw))) return 65
-  if (LOW_IMPACT_KEYWORDS.some(kw => lower.includes(kw))) return 15
-  return null // no signal — truly unknown
+  if (CRITICAL_IMPACT_KEYWORDS.some(kw => lower.includes(kw))) return { score: 85, tier: 'critical' }
+  if (HIGH_IMPACT_KEYWORDS.some(kw => lower.includes(kw)))     return { score: 68, tier: 'high' }
+  if (MEDIUM_IMPACT_KEYWORDS.some(kw => lower.includes(kw)))   return { score: 50, tier: 'medium' }
+  if (LOW_IMPACT_KEYWORDS.some(kw => lower.includes(kw)))      return { score: 18, tier: 'low' }
+  return { score: 42, tier: 'unknown' } // neutral — meaningful midpoint, not a basement
 }
 
 function inferUrgencyFromTitle(title: string): number | null {
   const lower = title.toLowerCase()
-  if (URGENCY_KEYWORDS.some(kw => lower.includes(kw))) return 75
-  return null
+  if (CRITICAL_URGENCY_KEYWORDS.some(kw => lower.includes(kw))) return 88
+  if (HIGH_URGENCY_KEYWORDS.some(kw => lower.includes(kw)))     return 70
+  return null // no signal — genuinely unknown
 }
 
-// ─── Deterministic Scoring (Weighted Decision Tree) ────────────────────────
+// ─── Smooth urgency curve ──────────────────────────────────────────────────
+// Replaces hard cliffs with a continuous curve so nearby deadlines
+// don't cause jarring re-rankings minute to minute.
+
+function urgencyFromHours(hoursUntilDue: number): number {
+  if (hoursUntilDue < 0)   return 100                          // overdue
+  if (hoursUntilDue === 0) return 100
+  // Exponential decay: 100 at 0h, ~88 at 2h, ~72 at 8h, ~55 at 24h, ~35 at 72h, floors at 12
+  const raw = 100 * Math.exp(-0.012 * hoursUntilDue)
+  return Math.round(Math.max(12, Math.min(100, raw)))
+}
+
+// ─── Deterministic Scoring ─────────────────────────────────────────────────
 
 export function calculateTaskScoreLocal(
   task: {
@@ -46,73 +75,103 @@ export function calculateTaskScoreLocal(
   profile: Pick<Profile, 'hourly_rate' | 'work_start_hour' | 'work_end_hour'>
 ) {
   const durationHours = (task.estimated_duration_mins || 60) / 60
-
-  // ── Impact Score ──────────────────────────────────────────────────────────
-  let impactScore: number
   const hasEconomicData = task.estimated_value != null && task.estimated_value > 0
 
+  // ── Impact Score (0–100) ──────────────────────────────────────────────────
+  // Fix: cap removed (was * 0.80), now full 0–100 range
+  // Fix: unknown fallback raised from 30 → 42 (true midpoint)
+  let impactScore: number
+  let impactTier = 'unknown'
+
   if (hasEconomicData) {
-    const taskValue = task.estimated_value!
-    const taskHourlyRate = durationHours > 0 ? taskValue / durationHours : 0
-    impactScore = Math.min(100, Math.round((taskHourlyRate / profile.hourly_rate) * 80))
+    const taskValue        = task.estimated_value!
+    const taskHourlyRate   = durationHours > 0 ? taskValue / durationHours : taskValue
+    const ratio            = taskHourlyRate / (profile.hourly_rate || 50)
+    // Logarithmic scale: ratio=0.5 → ~55, ratio=1 → ~70, ratio=2 → ~85, ratio=4 → ~100
+    impactScore = Math.round(Math.min(100, Math.max(0, 70 + 30 * Math.log2(ratio) / 2)))
+    impactTier  = ratio >= 2 ? 'critical' : ratio >= 1 ? 'high' : ratio >= 0.5 ? 'medium' : 'low'
   } else {
-    // Fall back to title keyword inference
     const inferred = inferImpactFromTitle(task.title)
-    impactScore = inferred ?? 30 // neutral unknown baseline
+    impactScore    = inferred.score
+    impactTier     = inferred.tier
   }
 
-  // ── Urgency Score ─────────────────────────────────────────────────────────
+  // ── Urgency Score (0–100) ─────────────────────────────────────────────────
+  // Fix: continuous exponential curve instead of hard step brackets
+  // Fix: no-date tasks differentiated by title keywords (not all stuck at 30)
   let urgencyScore: number
+  let hasDeadline = false
 
   if (task.due_date) {
     const hoursUntilDue = (new Date(task.due_date).getTime() - Date.now()) / (1000 * 60 * 60)
-    if (hoursUntilDue < 0) urgencyScore = 100
-    else if (hoursUntilDue <= 2) urgencyScore = 95
-    else if (hoursUntilDue <= 8) urgencyScore = 80
-    else if (hoursUntilDue <= 24) urgencyScore = 60
-    else urgencyScore = Math.max(10, 60 - Math.floor(hoursUntilDue / 24) * 5)
+    urgencyScore = urgencyFromHours(hoursUntilDue)
+    hasDeadline  = true
   } else {
-    // Fall back to title keyword inference
     const inferred = inferUrgencyFromTitle(task.title)
-    urgencyScore = inferred ?? 30 // no urgency signal
+    // No date + no keyword → use a moderate default that still allows differentiation
+    urgencyScore = inferred ?? 35
   }
 
-  // ── Effort Score ──────────────────────────────────────────────────────────
-  let effortScore = 50
-  if (durationHours > 3) effortScore = 90
-  else if (durationHours > 1) effortScore = 70
-  else if (durationHours < 0.5) effortScore = 20
+  // ── Effort Score (0–100, inverse contribution) ────────────────────────────
+  // Fix: weight raised to 20% and made continuous, not step-based
+  // Shorter tasks score higher on effort (meaning they contribute more positively)
+  // because quick wins that unblock other work should rank slightly higher
+  // than equally-valued but very long tasks.
+  let effortScore: number
+  if (durationHours <= 0.25)     effortScore = 95   // <15 min — quick win
+  else if (durationHours <= 0.5) effortScore = 82   // 15-30 min
+  else if (durationHours <= 1)   effortScore = 70   // 30-60 min
+  else if (durationHours <= 2)   effortScore = 55   // 1-2 hr
+  else if (durationHours <= 4)   effortScore = 38   // 2-4 hr
+  else                            effortScore = 20   // 4hr+ deep work block
 
   // ── Weighted Combination ──────────────────────────────────────────────────
+  // Fix: weights rebalanced — impact 50%, urgency 30%, effort 20%
+  // Effort now meaningful but never overrides economic signal
   const overall = Math.round(
-    (impactScore * 0.45) + (urgencyScore * 0.40) + ((100 - effortScore) * 0.15)
+    (impactScore  * 0.50) +
+    (urgencyScore * 0.30) +
+    (effortScore  * 0.20)
   )
 
+  // ── Confidence signal ──────────────────────────────────────────────────────
+  // How much structured data did we actually have?
+  const dataPoints = [hasEconomicData, hasDeadline, !!task.estimated_duration_mins].filter(Boolean).length
+  const confidence: 'high' | 'medium' | 'low' =
+    dataPoints === 3 ? 'high' : dataPoints >= 1 ? 'medium' : 'low'
+
   // ── Reasoning ─────────────────────────────────────────────────────────────
-  const taskValue = task.estimated_value ?? 0
-  const taskHourlyRate = hasEconomicData
-    ? Math.round(taskValue / durationHours)
-    : null
+  const taskValue      = task.estimated_value ?? 0
+  const taskHourlyRate = hasEconomicData ? Math.round(taskValue / durationHours) : null
 
   let reasoning = ''
-  const noStructuredData = !hasEconomicData && !task.due_date
 
-  if (noStructuredData) {
-    if (overall >= 60) {
-      reasoning = `Title suggests high-impact work. Add an estimated value and due date for a precise score.`
+  if (confidence === 'low') {
+    if (impactTier === 'critical' || impactTier === 'high') {
+      reasoning = `Title signals high-value work. Add an estimated value and due date to get a precise score.`
+    } else if (impactTier === 'low') {
+      reasoning = `Looks like admin or low-value work. Defer to low-energy hours unless it's blocking something.`
     } else {
-      reasoning = `No economic data provided. Score is estimated from task title — add a value and deadline to improve accuracy.`
+      reasoning = `No economic data. Score is inferred from title — add a value and deadline for accuracy.`
     }
   } else if (overall >= 80) {
     reasoning = taskHourlyRate
-      ? `High revenue potential ($${taskHourlyRate}/hr) and tight deadline. Do this FIRST.`
-      : `High urgency task. Get this done before anything else.`
-  } else if (impactScore > 70) {
-    reasoning = `Strong revenue driver but low urgency. Schedule for peak morning hours.`
-  } else if (urgencyScore > 80) {
-    reasoning = `High urgency, but low revenue impact. Get this out of the way quickly.`
+      ? `High revenue ($${taskHourlyRate}/hr) with a tight deadline. Do this FIRST.`
+      : `High urgency task. Clear this before anything else.`
+  } else if (impactScore >= 75 && urgencyScore < 50) {
+    reasoning = taskHourlyRate
+      ? `Strong earner ($${taskHourlyRate}/hr) but no immediate deadline. Block time for this today.`
+      : `High-value work with no hard deadline. Schedule for your peak hours.`
+  } else if (urgencyScore >= 75 && impactScore < 50) {
+    reasoning = `Urgent but low revenue impact. Handle quickly so it stops taking mental space.`
+  } else if (effortScore >= 80 && overall >= 60) {
+    reasoning = `Quick win with solid value. Do this now — it'll be done before you know it.`
   } else {
-    reasoning = `Low impact administrative task. Procrastination trap: defer to low-energy afternoon hours.`
+    reasoning = `Low-impact task. Batch with similar work or defer to afternoon.`
+  }
+
+  if (confidence === 'medium' && !hasEconomicData) {
+    reasoning += ` (Add estimated value for a more precise score.)`
   }
 
   return {
