@@ -366,12 +366,8 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      </main>
 
-      {/* Floating Chat Coach */}
-      <ChatCoach tasks={tasks} />
-    </div>
-     {/* Feedback */}
+        {/* Feedback Section */}
         <FeedbackSection />
       </main>
 
@@ -379,7 +375,4 @@ export default function DashboardPage() {
       <ChatCoach tasks={tasks} />
     </div>
   )
-  
-  
-
 }
