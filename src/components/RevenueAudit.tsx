@@ -63,7 +63,7 @@ export default function RevenueAudit({ tasks, profile }: RevenueAuditProps) {
           <div className="text-[10px] text-sage font-bold uppercase tracking-widest flex items-center gap-1">
              AI Efficiency Audit <ArrowUpRight size={10} />
           </div>
-          <p className="text-xs text-cream/70 mt-1">Delegate your $${opportunityCost.toFixed(0)} low-impact queue to recover margin.</p>
+          <p className="text-xs text-cream/70 mt-1">Delegate your ${opportunityCost.toFixed(0)} low-impact queue to recover margin.</p>
         </div>
         <div className="text-right">
            <div className="text-xl font-mono font-bold text-white">ROI: 12.4x</div>

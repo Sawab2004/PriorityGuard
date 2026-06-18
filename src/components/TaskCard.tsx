@@ -10,9 +10,9 @@ import { CheckCircle, Clock, SkipForward, Trash2, ChevronDown, ChevronUp, User, 
 
 interface TaskCardProps {
   task: Task
-  onComplete: (id: string) => void
-  onSkip: (id: string) => void
-  onDelete: (id: string) => void
+  onComplete: (id: string) => void | Promise<void>
+  onSkip: (id: string) => void | Promise<void>
+  onDelete: (id: string) => void | Promise<void>
   isTop?: boolean
 }
 
@@ -20,6 +20,8 @@ export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: 
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [delegationBrief, setDelegationBrief] = useState<string | null>(task.delegation_brief || null)
+  const [delegateError, setDelegateError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const handleComplete = async () => {
     setLoading('complete')
@@ -41,6 +43,7 @@ export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: 
 
   const handleDelegate = async () => {
     setLoading('delegate')
+    setDelegateError(null)
     try {
       const res = await fetch('/api/ai/delegate', {
         method: 'POST',
@@ -51,22 +54,34 @@ export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: 
           description: task.description
         })
       })
+
+      if (!res.ok) {
+        throw new Error(res.status === 404 ? 'Delegation feature is not available yet.' : 'Could not generate a brief. Please try again.')
+      }
+
       const data = await res.json()
       if (data.brief) {
         setDelegationBrief(data.brief)
         setExpanded(true)
+      } else {
+        throw new Error('No brief was returned. Please try again.')
       }
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      console.error('Delegate error:', err)
+      setDelegateError(err.message || 'Something went wrong. Please try again.')
     } finally {
       setLoading(null)
     }
   }
 
-  const copyBrief = () => {
-    if (delegationBrief) {
-      navigator.clipboard.writeText(delegationBrief)
-      alert('Brief copied to clipboard!')
+  const copyBrief = async () => {
+    if (!delegationBrief) return
+    try {
+      await navigator.clipboard.writeText(delegationBrief)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setDelegateError('Could not copy to clipboard. Please select and copy manually.')
     }
   }
 
@@ -198,8 +213,8 @@ export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: 
             <div className="bg-sage/5 rounded-xl p-4 border border-sage/15 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-[10px] font-bold tracking-widest uppercase text-sage">VA Delegation Brief</p>
-                <button onClick={copyBrief} className="text-sage hover:text-sage-dark flex items-center gap-1 text-[10px] uppercase font-bold">
-                  <Copy size={12} /> Copy Brief
+                <button onClick={copyBrief} className="text-sage hover:text-sage-dark flex items-center gap-1 text-[10px] uppercase font-bold transition-colors">
+                  <Copy size={12} /> {copied ? 'Copied!' : 'Copy Brief'}
                 </button>
               </div>
               <div className="text-xs font-body text-sage/80 leading-relaxed whitespace-pre-wrap italic">
@@ -271,6 +286,10 @@ export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: 
             }
             Delegate
           </button>
+        )}
+
+        {delegateError && (
+          <span className="text-xs text-rust font-body">{delegateError}</span>
         )}
 
         <button
