@@ -13,6 +13,7 @@ import RevenueAudit from '@/components/RevenueAudit'
 import ChatCoach from '@/components/ChatCoach'
 import { LogOut, Zap, User } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import FeedbackSection from '@/components/FeedbackSection'
 
 type FilterTab = 'pending' | 'completed' | 'skipped' | 'all'
 
@@ -371,4 +372,6 @@ export default function DashboardPage() {
       <ChatCoach tasks={tasks} />
     </div>
   )
+  <FeedbackSection />
+
 }
