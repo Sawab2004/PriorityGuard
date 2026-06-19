@@ -7,6 +7,11 @@ import { Task } from '@/types'
 import { getScoreColor, getScoreLabel, formatDuration, formatDueDate, cn } from '@/lib/utils'
 import { CheckCircle, SkipForward, ArrowLeft, Clock } from 'lucide-react'
 
+// High-priority threshold for Focus Mode — kept in sync with the
+// "high-value" threshold already used in StatsBar so the two parts of
+// the app agree on what "high priority" means.
+const HIGH_PRIORITY_THRESHOLD = 60
+
 export default function FocusPage() {
   const router = useRouter()
   const supabase = createBrowserClient()
@@ -43,10 +48,18 @@ export default function FocusPage() {
         return
       }
 
-      // FIX: Removed the `scheduled_for = today` filter.
-      // Previously, tasks from previous days or tasks added without a scheduled
-      // date would never appear in Focus Mode even though they were still pending.
-      // Now Focus Mode shows ALL pending tasks, sorted by score — same as the dashboard.
+      // Focus Mode shows HIGH-PRIORITY pending tasks (ai_score >= 60),
+      // regardless of scheduled date. This replaces the original
+      // "scheduled_for = today" filter: a high-value task shouldn't
+      // disappear from Focus Mode just because it wasn't explicitly
+      // dated for today, and a low-value task scheduled for today
+      // shouldn't crowd out higher-value work that's still pending.
+      //
+      // The threshold matches StatsBar's existing "high-value" cutoff
+      // so the two parts of the dashboard agree on what counts as
+      // high priority. We filter client-side (rather than in the
+      // query) so a clear, explicit constant drives the cutoff and
+      // it's easy to find/tune in one place.
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
@@ -54,7 +67,18 @@ export default function FocusPage() {
         .eq('status', 'pending')
         .order('ai_score', { ascending: false })
 
-      if (data) setTasks(data)
+      if (error) {
+        console.error('Failed to load focus tasks:', error)
+        setTasks([])
+        setLoading(false)
+        return
+      }
+
+      const highPriority = (data || []).filter(
+        t => (t.ai_score ?? 0) >= HIGH_PRIORITY_THRESHOLD
+      )
+
+      setTasks(highPriority)
       setLoading(false)
     }
 
@@ -115,12 +139,12 @@ export default function FocusPage() {
       <div className="min-h-screen bg-ink flex flex-col items-center justify-center p-8 text-center">
         <div className="text-5xl mb-6">🎯</div>
         <h1 className="font-display text-3xl font-bold text-cream mb-3">
-          {tasks.length === 0 ? 'No pending tasks' : 'Queue complete!'}
+          {tasks.length === 0 ? 'No high-priority tasks' : 'Queue complete!'}
         </h1>
         <p className="font-body text-cream/50 text-sm mb-8 max-w-xs">
           {tasks.length === 0
-            ? 'Head back to the dashboard and add your tasks for the day.'
-            : `Focus session: ${formatElapsed(elapsed)}. You worked through every task.`}
+            ? `No pending tasks scored ${HIGH_PRIORITY_THRESHOLD}+ right now. Add more detail to your tasks (value, deadline) for sharper scoring, or head back to the dashboard.`
+            : `Focus session: ${formatElapsed(elapsed)}. You worked through every high-priority task.`}
         </p>
         <button
           onClick={() => router.push('/dashboard')}
@@ -135,7 +159,7 @@ export default function FocusPage() {
 
   const score = currentTask.ai_score
   const scoreColor = getScoreColor(score)
-  const progress = (currentIndex / tasks.length) * 100
+  const progress = ((currentIndex + 1) / tasks.length) * 100
 
   return (
     <div className="min-h-screen bg-ink flex flex-col">
