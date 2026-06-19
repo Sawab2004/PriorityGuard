@@ -21,10 +21,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Calendar not connected' }, { status: 400 })
   }
 
-  const calendarTasks = await fetchCalendarTasks(
-    profile.google_access_token,
-    profile.google_refresh_token
-  )
+  // Token refresh callback — persists new credentials to the profile row,
+  // matching the Gmail route so calendar sync doesn't break every hour
+  // when the access token expires.
+  const onTokenRefresh = async (newAccessToken: string, expiryDate: number) => {
+    await supabase
+      .from('profiles')
+      .update({
+        google_access_token: newAccessToken,
+        google_token_expiry: new Date(expiryDate).toISOString(),
+      })
+      .eq('id', session.user.id)
+  }
+
+  let calendarTasks
+  try {
+    calendarTasks = await fetchCalendarTasks(
+      profile.google_access_token,
+      profile.google_refresh_token,
+      onTokenRefresh
+    )
+  } catch (err: any) {
+    // This try/catch was previously missing entirely, so an expired token
+    // (or any other failure inside fetchCalendarTasks) surfaced as an
+    // unhandled 500 with no useful message — which is what showed up in
+    // the UI as the generic "Sync failed. Try again."
+    if (err.message === 'GOOGLE_AUTH_EXPIRED') {
+      await supabase
+        .from('profiles')
+        .update({ calendar_sync_enabled: false })
+        .eq('id', session.user.id)
+      return NextResponse.json(
+        { error: 'Calendar authorization expired. Please reconnect your Google account.' },
+        { status: 401 }
+      )
+    }
+    console.error('Calendar sync failed:', err)
+    return NextResponse.json({ error: 'Calendar sync failed' }, { status: 500 })
+  }
 
   if (calendarTasks.length === 0) {
     return NextResponse.json({ message: 'No upcoming events found', imported: 0 })

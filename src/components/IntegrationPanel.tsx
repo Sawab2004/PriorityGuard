@@ -33,10 +33,20 @@ export default function IntegrationPanel({
     try {
       const res = await fetch('/api/gmail', { method: 'POST' })
       const data = await res.json()
+
+      if (!res.ok) {
+        // Previously fell through to `data.message` / `data.imported`,
+        // both undefined on an error response — which is what produced
+        // the literal "Imported undefined tasks" message in the UI.
+        setGmailResult(data.error || 'Sync failed. Try again.')
+        return
+      }
+
       setGmailResult(data.message || `Imported ${data.imported} tasks`)
       if (data.imported > 0) onTasksImported()
-    } catch {
-      setGmailResult('Sync failed. Try again.')
+    } catch (err) {
+      console.error('Gmail sync error:', err)
+      setGmailResult('Could not reach the server. Check your connection and try again.')
     } finally {
       setSyncingGmail(false)
     }
@@ -48,10 +58,17 @@ export default function IntegrationPanel({
     try {
       const res = await fetch('/api/calendar', { method: 'POST' })
       const data = await res.json()
+
+      if (!res.ok) {
+        setCalendarResult(data.error || 'Sync failed. Try again.')
+        return
+      }
+
       setCalendarResult(data.message || `Imported ${data.imported} events`)
       if (data.imported > 0) onTasksImported()
-    } catch {
-      setCalendarResult('Sync failed. Try again.')
+    } catch (err) {
+      console.error('Calendar sync error:', err)
+      setCalendarResult('Could not reach the server. Check your connection and try again.')
     } finally {
       setSyncingCalendar(false)
     }
@@ -140,46 +157,43 @@ export default function IntegrationPanel({
           
           <div className="border-t border-ink/10 pt-3 space-y-3">
              <div className="text-[10px] uppercase font-bold text-mist/60 tracking-wider">Zero-Admin Integrations</div>
-             
-             {/* Notion Mock */}
+
+             {/* Notion — not yet built */}
              <div className="flex flex-col gap-1">
                <div className="flex items-center justify-between">
-                 <div className="flex items-center gap-2 text-ink">
-                    <span className="text-sm">📓</span>
+                 <div className="flex items-center gap-2 text-ink/50">
+                    <span className="text-sm grayscale opacity-60">📓</span>
                     <span className="text-xs font-body font-medium">Notion Tasks</span>
-                    <span className="px-2 py-0.5 text-[9px] font-bold text-sage bg-sage/15 rounded-md">Coming Soon</span>
                  </div>
-                 <button disabled className="flex items-center gap-1 text-xs font-body bg-mist/10 px-2 py-1 rounded text-mist cursor-not-allowed opacity-50">
-                    Connect
-                 </button>
+                 <span className="text-[10px] font-body font-semibold uppercase tracking-wide bg-mist/10 text-mist px-2 py-1 rounded">
+                   Coming soon
+                 </span>
                </div>
              </div>
 
-             {/* Todoist Mock */}
+             {/* Todoist — not yet built */}
              <div className="flex flex-col gap-1">
                <div className="flex items-center justify-between">
-                 <div className="flex items-center gap-2 text-ink">
-                    <span className="text-sm">✅</span>
+                 <div className="flex items-center gap-2 text-ink/50">
+                    <span className="text-sm grayscale opacity-60">✅</span>
                     <span className="text-xs font-body font-medium">Todoist</span>
-                    <span className="px-2 py-0.5 text-[9px] font-bold text-sage bg-sage/15 rounded-md">Coming Soon</span>
                  </div>
-                 <button disabled className="flex items-center gap-1 text-xs font-body bg-mist/10 px-2 py-1 rounded text-mist cursor-not-allowed opacity-50">
-                    Connect
-                 </button>
+                 <span className="text-[10px] font-body font-semibold uppercase tracking-wide bg-mist/10 text-mist px-2 py-1 rounded">
+                   Coming soon
+                 </span>
                </div>
              </div>
-             
-             {/* ClickUp Mock */}
+
+             {/* ClickUp — not yet built */}
              <div className="flex flex-col gap-1">
                <div className="flex items-center justify-between">
-                 <div className="flex items-center gap-2 text-ink">
-                    <span className="text-sm">🟣</span>
+                 <div className="flex items-center gap-2 text-ink/50">
+                    <span className="text-sm grayscale opacity-60">🟣</span>
                     <span className="text-xs font-body font-medium">ClickUp</span>
-                    <span className="px-2 py-0.5 text-[9px] font-bold text-sage bg-sage/15 rounded-md">Coming Soon</span>
                  </div>
-                 <button disabled className="flex items-center gap-1 text-xs font-body bg-mist/10 px-2 py-1 rounded text-mist cursor-not-allowed opacity-50">
-                    Connect
-                 </button>
+                 <span className="text-[10px] font-body font-semibold uppercase tracking-wide bg-mist/10 text-mist px-2 py-1 rounded">
+                   Coming soon
+                 </span>
                </div>
              </div>
           </div>
