@@ -6,22 +6,91 @@ import {
   getScoreColor, getScoreBg, getScoreLabel, getScoreBarColor,
   formatDuration, formatDueDate, getSourceIcon, cn
 } from '@/lib/utils'
-import { CheckCircle, Clock, SkipForward, Trash2, ChevronDown, ChevronUp, User, Copy, Loader2 } from 'lucide-react'
+import { CheckCircle, Clock, SkipForward, Trash2, ChevronDown, ChevronUp, User, Copy, Loader2, Pencil, X, Save } from 'lucide-react'
 
 interface TaskCardProps {
   task: Task
   onComplete: (id: string) => void | Promise<void>
   onSkip: (id: string) => void | Promise<void>
   onDelete: (id: string) => void | Promise<void>
+  onTaskUpdated?: (task: Task) => void
   isTop?: boolean
 }
 
-export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: TaskCardProps) {
+export default function TaskCard({ task, onComplete, onSkip, onDelete, onTaskUpdated, isTop }: TaskCardProps) {
   const [expanded, setExpanded] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [delegationBrief, setDelegationBrief] = useState<string | null>(task.delegation_brief || null)
   const [delegateError, setDelegateError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  // ── Inline editing state ───────────────────────────────────────────────
+  const [isEditing, setIsEditing] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState({
+    title: task.title,
+    description: task.description || '',
+    due_date: task.due_date ? task.due_date.slice(0, 16) : '', // trim to datetime-local format
+    estimated_value: task.estimated_value?.toString() || '',
+    estimated_duration_mins: task.estimated_duration_mins?.toString() || '',
+  })
+
+  const startEditing = () => {
+    setEditForm({
+      title: task.title,
+      description: task.description || '',
+      due_date: task.due_date ? task.due_date.slice(0, 16) : '',
+      estimated_value: task.estimated_value?.toString() || '',
+      estimated_duration_mins: task.estimated_duration_mins?.toString() || '',
+    })
+    setEditError(null)
+    setIsEditing(true)
+    setExpanded(true)
+  }
+
+  const cancelEditing = () => {
+    setIsEditing(false)
+    setEditError(null)
+  }
+
+  const saveEdit = async () => {
+    if (!editForm.title.trim()) {
+      setEditError('Title cannot be empty.')
+      return
+    }
+
+    setLoading('edit')
+    setEditError(null)
+
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          description: editForm.description.trim() || null,
+          due_date: editForm.due_date ? new Date(editForm.due_date).toISOString() : null,
+          estimated_value: editForm.estimated_value ? parseFloat(editForm.estimated_value) : null,
+          estimated_duration_mins: editForm.estimated_duration_mins
+            ? parseInt(editForm.estimated_duration_mins)
+            : null,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Could not save changes. Please try again.')
+      }
+
+      onTaskUpdated?.(data.task)
+      setIsEditing(false)
+    } catch (err: any) {
+      setEditError(err.message || 'Something went wrong. Please try again.')
+    } finally {
+      setLoading(null)
+    }
+  }
 
   const handleComplete = async () => {
     setLoading('complete')
@@ -126,12 +195,22 @@ export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: 
                 {task.title}
               </h3>
             </div>
-            <button
-              onClick={() => setExpanded(e => !e)}
-              className="flex-shrink-0 text-mist hover:text-ink transition-colors mt-0.5"
-            >
-              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+              <button
+                onClick={startEditing}
+                disabled={isEditing}
+                className="text-mist hover:text-ink transition-colors disabled:opacity-30"
+                title="Edit task"
+              >
+                <Pencil size={14} />
+              </button>
+              <button
+                onClick={() => setExpanded(e => !e)}
+                className="text-mist hover:text-ink transition-colors"
+              >
+                {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+            </div>
           </div>
 
           {/* Meta row */}
@@ -173,6 +252,98 @@ export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: 
       {/* Expanded details */}
       {expanded && (
         <div className="mt-4 pl-16 animate-fade-in space-y-3">
+          {isEditing ? (
+            <div className="bg-white/60 rounded-xl p-4 border border-amber/25 space-y-3">
+              <div>
+                <label className="text-xs font-body text-mist mb-1 block">Title</label>
+                <input
+                  type="text"
+                  value={editForm.title}
+                  onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))}
+                  className="input-field text-sm py-2"
+                  autoFocus
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs font-body text-mist mb-1 block">Due date</label>
+                  <input
+                    type="datetime-local"
+                    value={editForm.due_date}
+                    onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))}
+                    className="input-field text-xs py-2"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-body text-mist mb-1 block">Value ($)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={editForm.estimated_value}
+                    onChange={e => setEditForm(f => ({ ...f, estimated_value: e.target.value }))}
+                    className="input-field text-xs py-2"
+                    placeholder="e.g. 500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-body text-mist mb-1 block">Duration (minutes)</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={editForm.estimated_duration_mins}
+                  onChange={e => setEditForm(f => ({ ...f, estimated_duration_mins: e.target.value }))}
+                  className="input-field text-xs py-2"
+                  placeholder="e.g. 60"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-body text-mist mb-1 block">Notes</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  className="input-field text-xs py-2 resize-none"
+                  rows={2}
+                />
+              </div>
+
+              {editError && (
+                <p className="text-xs text-rust font-body bg-rust/5 border border-rust/15 rounded-lg px-3 py-2">
+                  {editError}
+                </p>
+              )}
+
+              <p className="text-[10px] text-mist/60 font-body">
+                Saving will re-score this task using your updated value, duration, and due date.
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={saveEdit}
+                  disabled={loading !== null}
+                  className="flex-1 flex items-center justify-center gap-1.5 btn-primary text-xs py-2 disabled:opacity-50"
+                >
+                  {loading === 'edit'
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <Save size={12} />
+                  }
+                  Save & Re-score
+                </button>
+                <button
+                  onClick={cancelEditing}
+                  disabled={loading !== null}
+                  className="flex items-center justify-center gap-1.5 btn-secondary text-xs py-2 px-4"
+                >
+                  <X size={12} />
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
           {task.ai_category && (
             <div className="flex">
               <span className="tag bg-white/40 border border-ink/10 text-ink/80 text-[10px] tracking-wider uppercase">
@@ -237,6 +408,8 @@ export default function TaskCard({ task, onComplete, onSkip, onDelete, isTop }: 
                 </div>
               ))}
             </div>
+          )}
+            </>
           )}
         </div>
       )}

@@ -135,6 +135,16 @@ export default function DashboardPage() {
     }
   }
 
+  const handleTaskUpdated = (updatedTask: Task) => {
+    setTasks(prev =>
+      prev
+        .map(t => (t.id === updatedTask.id ? updatedTask : t))
+        .sort((a, b) => (b.ai_score ?? 0) - (a.ai_score ?? 0))
+    )
+    showToast(`✓ Task updated — new score: ${updatedTask.ai_score}/100`)
+  }
+ 
+
   const handleLogout = async () => {
     await supabase.auth.signOut()
     setProfile(null)
@@ -302,6 +312,7 @@ export default function DashboardPage() {
                     onComplete={handleComplete}
                     onSkip={handleSkip}
                     onDelete={handleDelete}
+                    onTaskUpdated={handleTaskUpdated}
                   />
                 ))}
               </div>
