@@ -159,7 +159,7 @@ src/
 │   │   └── server.ts            # Server + admin Supabase clients
 │   └── utils.ts                 # Helpers, formatters
 └── types/
-    └── index.ts                 # TypeScript types
+    └── index.ts                 # TypeScript types    
 ```
 
 ---

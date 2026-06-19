@@ -4,13 +4,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@/lib/supabase/client'
 import { Task } from '@/types'
-import { getScoreColor, getScoreLabel, formatDuration, formatDueDate, cn } from '@/lib/utils'
+import { getScoreColor, getScoreBg, getScoreLabel, formatDuration, formatDueDate, cn } from '@/lib/utils'
 import { CheckCircle, SkipForward, ArrowLeft, Clock } from 'lucide-react'
-
-// High-priority threshold for Focus Mode — kept in sync with the
-// "high-value" threshold already used in StatsBar so the two parts of
-// the app agree on what "high priority" means.
-const HIGH_PRIORITY_THRESHOLD = 60
 
 export default function FocusPage() {
   const router = useRouter()
@@ -48,24 +43,25 @@ export default function FocusPage() {
         return
       }
 
-      // Focus Mode shows HIGH-PRIORITY pending tasks (ai_score >= 60),
-      // regardless of scheduled date. This replaces the original
-      // "scheduled_for = today" filter: a high-value task shouldn't
-      // disappear from Focus Mode just because it wasn't explicitly
-      // dated for today, and a low-value task scheduled for today
-      // shouldn't crowd out higher-value work that's still pending.
+      // Focus Mode shows ALL pending tasks, regardless of scheduled
+      // date, ranked highest-score first. This replaces the previous
+      // ai_score >= 60 cutoff — a freelancer should be able to clear
+      // medium- and low-priority work in Focus Mode too, just always
+      // in priority order so high-leverage tasks never get buried.
       //
-      // The threshold matches StatsBar's existing "high-value" cutoff
-      // so the two parts of the dashboard agree on what counts as
-      // high priority. We filter client-side (rather than in the
-      // query) so a clear, explicit constant drives the cutoff and
-      // it's easy to find/tune in one place.
+      // nullsFirst: false matches the same convention GET /api/tasks
+      // uses, so an unscored task sinks to the bottom of the queue
+      // instead of jumping ahead of everything (Postgres defaults to
+      // NULLS FIRST on a descending sort otherwise). created_at is a
+      // secondary sort so tasks with equal/no score still land in a
+      // stable, predictable order.
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
         .eq('user_id', session.user.id)
         .eq('status', 'pending')
-        .order('ai_score', { ascending: false })
+        .order('ai_score', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
 
       if (error) {
         console.error('Failed to load focus tasks:', error)
@@ -74,11 +70,7 @@ export default function FocusPage() {
         return
       }
 
-      const highPriority = (data || []).filter(
-        t => (t.ai_score ?? 0) >= HIGH_PRIORITY_THRESHOLD
-      )
-
-      setTasks(highPriority)
+      setTasks(data || [])
       setLoading(false)
     }
 
@@ -139,12 +131,12 @@ export default function FocusPage() {
       <div className="min-h-screen bg-ink flex flex-col items-center justify-center p-8 text-center">
         <div className="text-5xl mb-6">🎯</div>
         <h1 className="font-display text-3xl font-bold text-cream mb-3">
-          {tasks.length === 0 ? 'No high-priority tasks' : 'Queue complete!'}
+          {tasks.length === 0 ? 'No pending tasks' : 'Queue complete!'}
         </h1>
         <p className="font-body text-cream/50 text-sm mb-8 max-w-xs">
           {tasks.length === 0
-            ? `No pending tasks scored ${HIGH_PRIORITY_THRESHOLD}+ right now. Add more detail to your tasks (value, deadline) for sharper scoring, or head back to the dashboard.`
-            : `Focus session: ${formatElapsed(elapsed)}. You worked through every high-priority task.`}
+            ? `You're all caught up — nothing pending right now. Add a task on the dashboard to start a focus session.`
+            : `Focus session: ${formatElapsed(elapsed)}. You worked through your entire queue.`}
         </p>
         <button
           onClick={() => router.push('/dashboard')}
@@ -209,7 +201,7 @@ export default function FocusPage() {
 
           {/* Task */}
           <div className="text-center mb-6">
-            <div className="tag bg-amber/20 text-amber mb-4 mx-auto inline-flex">
+            <div className={cn('tag mb-4 mx-auto inline-flex', getScoreBg(score), getScoreColor(score))}>
               ⚡ {getScoreLabel(score)} Priority
             </div>
             <h1 className="font-display text-2xl sm:text-3xl font-bold text-cream mb-3 leading-tight text-balance">

@@ -62,8 +62,14 @@ export function formatDueDate(dateStr: string | null): string {
 }
 
 export function estimateRevenueProtected(tasks: Task[], hourlyRate: number): number {
+  // Previously this only counted completed tasks scored >= 60, so
+  // finishing a lower-priority task contributed $0 even though real
+  // time was spent on it. Revenue Protected should reflect the value
+  // of ALL completed work today, not just the high-value subset —
+  // that distinction already lives in Drift Score, which separately
+  // measures how much of your completed work was low-value.
   return tasks
-    .filter(t => t.status === 'completed' && (t.ai_score ?? 0) >= 60)
+    .filter(t => t.status === 'completed')
     .reduce((acc, t) => {
       if (t.estimated_value) return acc + t.estimated_value
       if (t.estimated_duration_mins) return acc + (t.estimated_duration_mins / 60) * hourlyRate
