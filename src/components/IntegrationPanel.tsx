@@ -147,10 +147,9 @@ export default function IntegrationPanel({
                  <div className="flex items-center gap-2 text-ink">
                     <span className="text-sm">📓</span>
                     <span className="text-xs font-body font-medium">Notion Tasks</span>
+                    <span className="px-2 py-0.5 text-[9px] font-bold text-sage bg-sage/15 rounded-md">Coming Soon</span>
                  </div>
-                 <button className="flex items-center gap-1 text-xs font-body bg-ink/5 px-2 py-1 rounded text-ink hover:bg-ink/10 transition-colors" onClick={() => {
-                   setSyncingGmail(true); setTimeout(() => {setSyncingGmail(false); onTasksImported();}, 600)
-                 }}>
+                 <button disabled className="flex items-center gap-1 text-xs font-body bg-mist/10 px-2 py-1 rounded text-mist cursor-not-allowed opacity-50">
                     Connect
                  </button>
                </div>
@@ -162,10 +161,9 @@ export default function IntegrationPanel({
                  <div className="flex items-center gap-2 text-ink">
                     <span className="text-sm">✅</span>
                     <span className="text-xs font-body font-medium">Todoist</span>
+                    <span className="px-2 py-0.5 text-[9px] font-bold text-sage bg-sage/15 rounded-md">Coming Soon</span>
                  </div>
-                 <button className="flex items-center gap-1 text-xs font-body bg-ink/5 px-2 py-1 rounded text-ink hover:bg-ink/10 transition-colors" onClick={() => {
-                   setSyncingGmail(true); setTimeout(() => {setSyncingGmail(false); onTasksImported();}, 600)
-                 }}>
+                 <button disabled className="flex items-center gap-1 text-xs font-body bg-mist/10 px-2 py-1 rounded text-mist cursor-not-allowed opacity-50">
                     Connect
                  </button>
                </div>
@@ -177,10 +175,9 @@ export default function IntegrationPanel({
                  <div className="flex items-center gap-2 text-ink">
                     <span className="text-sm">🟣</span>
                     <span className="text-xs font-body font-medium">ClickUp</span>
+                    <span className="px-2 py-0.5 text-[9px] font-bold text-sage bg-sage/15 rounded-md">Coming Soon</span>
                  </div>
-                 <button className="flex items-center gap-1 text-xs font-body bg-ink/5 px-2 py-1 rounded text-ink hover:bg-ink/10 transition-colors" onClick={() => {
-                   setSyncingGmail(true); setTimeout(() => {setSyncingGmail(false); onTasksImported();}, 600)
-                 }}>
+                 <button disabled className="flex items-center gap-1 text-xs font-body bg-mist/10 px-2 py-1 rounded text-mist cursor-not-allowed opacity-50">
                     Connect
                  </button>
                </div>
