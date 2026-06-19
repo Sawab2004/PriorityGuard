@@ -9,11 +9,17 @@ interface StatsBarProps {
 }
 
 export default function StatsBar({ tasks, hourlyRate }: StatsBarProps) {
+  const todayStr = new Date().toISOString().split('T')[0]
+  const isToday = (dateStr: string | null) => !!dateStr && dateStr.split('T')[0] === todayStr
+
   const pending = tasks.filter(t => t.status === 'pending')
-  const completed = tasks.filter(t => t.status === 'completed')
-  const skipped = tasks.filter(t => t.status === 'skipped')
+  // "Completed today" and "Skipped" should only count today's activity —
+  // otherwise these numbers silently include all-time history once the
+  // dashboard fetches more than just today's tasks.
+  const completedToday = tasks.filter(t => t.status === 'completed' && isToday(t.completed_at))
+  const skippedToday = tasks.filter(t => t.status === 'skipped' && isToday(t.updated_at))
   const highValue = pending.filter(t => (t.ai_score ?? 0) >= 60)
-  const revenueProtected = estimateRevenueProtected(completed, hourlyRate)
+  const revenueProtected = estimateRevenueProtected(completedToday, hourlyRate)
   const driftScore = calculateDriftScore(tasks)
 
   const stats = [
@@ -25,14 +31,14 @@ export default function StatsBar({ tasks, hourlyRate }: StatsBarProps) {
     },
     {
       label: 'Completed',
-      value: completed.length,
+      value: completedToday.length,
       sub: 'today',
       color: 'text-sage',
     },
     {
       label: 'Skipped',
-      value: skipped.length,
-      sub: 'deferred',
+      value: skippedToday.length,
+      sub: 'today',
       color: 'text-mist',
     },
     {

@@ -13,15 +13,36 @@ export default function RevenueAudit({ tasks, profile }: RevenueAuditProps) {
   const hourlyRate = profile?.hourly_rate || 50
 
   const pendingTasks = tasks.filter(t => t.status === 'pending')
-  const lowImpactTasks = pendingTasks.filter(t => t.ai_category === 'Low-Impact Administrative' || t.ai_category === 'Procrastination Trap')
-  const highImpactTasks = pendingTasks.filter(t => t.ai_category === 'High-Impact')
 
-  // Revenue at Risk = Total Value of High Impact Tasks that are past due or nearing due
+  // ai_category comes from an async Gemini call and may not have arrived yet
+  // (or Gemini may be disabled). Fall back to the deterministic ai_score so
+  // these numbers aren't $0 just because enrichment hasn't finished.
+  const isLowImpact = (t: Task) => {
+    if (t.ai_category === 'Low-Impact Administrative' || t.ai_category === 'Procrastination Trap') return true
+    if (!t.ai_category || t.ai_category === 'Uncategorized') return (t.ai_score ?? 0) < 40
+    return false
+  }
+  const isHighImpact = (t: Task) => {
+    if (t.ai_category === 'High-Impact') return true
+    if (!t.ai_category || t.ai_category === 'Uncategorized') return (t.ai_score ?? 0) >= 70
+    return false
+  }
+
+  const lowImpactTasks = pendingTasks.filter(isLowImpact)
+  const highImpactTasks = pendingTasks.filter(isHighImpact)
+
+  // Revenue at Risk = Total value sitting in the high-impact queue, unclaimed
   const revenueAtRisk = highImpactTasks.reduce((acc, t) => acc + (t.estimated_value || 0), 0)
 
   // Opportunity Cost = Time spent on low impact tasks * hourly rate
   const lowImpactTimeMins = lowImpactTasks.reduce((acc, t) => acc + (t.estimated_duration_mins || 30), 0)
   const opportunityCost = (lowImpactTimeMins / 60) * hourlyRate
+
+  // Real ROI estimate: revenue at risk relative to the cost of the
+  // distracting low-impact work, instead of a hardcoded number that never moves.
+  const roi = opportunityCost > 0 ? revenueAtRisk / opportunityCost : null
+
+  const hasAnyData = pendingTasks.length > 0
 
   return (
     <div className="bg-white/40 backdrop-blur-sm border border-ink/8 rounded-2xl p-5 space-y-5 animate-slide-up">
@@ -58,17 +79,29 @@ export default function RevenueAudit({ tasks, profile }: RevenueAuditProps) {
         </div>
       </div>
 
-      <div className="bg-ink rounded-xl p-4 flex items-center justify-between group cursor-help transition-all">
-        <div>
-          <div className="text-[10px] text-sage font-bold uppercase tracking-widest flex items-center gap-1">
-             AI Efficiency Audit <ArrowUpRight size={10} />
+      {!hasAnyData ? (
+        <div className="bg-ink/5 rounded-xl p-4 text-center">
+          <p className="text-xs text-mist font-body">Add a task to see your revenue audit.</p>
+        </div>
+      ) : (
+        <div className="bg-ink rounded-xl p-4 flex items-center justify-between group cursor-help transition-all">
+          <div>
+            <div className="text-[10px] text-sage font-bold uppercase tracking-widest flex items-center gap-1">
+               AI Efficiency Audit <ArrowUpRight size={10} />
+            </div>
+            <p className="text-xs text-cream/70 mt-1">
+              {opportunityCost > 0
+                ? `Delegate your $${opportunityCost.toFixed(0)} low-impact queue to recover margin.`
+                : 'No low-impact drag right now — queue is lean.'}
+            </p>
           </div>
-          <p className="text-xs text-cream/70 mt-1">Delegate your ${opportunityCost.toFixed(0)} low-impact queue to recover margin.</p>
+          <div className="text-right">
+             <div className="text-xl font-mono font-bold text-white">
+               {roi !== null ? `ROI: ${roi.toFixed(1)}x` : '—'}
+             </div>
+          </div>
         </div>
-        <div className="text-right">
-           <div className="text-xl font-mono font-bold text-white">ROI: 12.4x</div>
-        </div>
-      </div>
+      )}
     </div>
   )
 }
